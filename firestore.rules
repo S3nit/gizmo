@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn(){return request.auth != null;}
+  function moderator(){return signedIn() && request.auth.token.moderator == true;}
+  function approved(){return resource.data.status == 'approved';}
+  function validBody(){return request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 2000;}
+  function validIdentity(){return signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.displayName == request.auth.token.name && request.resource.data.photoURL == (request.auth.token.picture == null ? '' : request.auth.token.picture);}
+  match /projectComments/{id} {
+   allow read: if approved() || (signedIn() && resource.data.userId == request.auth.uid) || moderator();
+   allow create: if validIdentity() && validBody() && request.resource.data.keys().hasOnly(['projectId','userId','displayName','photoURL','body','parentId','status','createdAt','updatedAt']) && request.resource.data.projectId is string && request.resource.data.projectId.size() <= 100 && (request.resource.data.parentId == null || request.resource.data.parentId is string) && request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+   allow delete: if signedIn() && (resource.data.userId == request.auth.uid || moderator());
+   allow update: if moderator();
+  }
+  match /projectIdeas/{id} {
+   allow read: if approved() || (signedIn() && resource.data.userId == request.auth.uid) || moderator();
+   allow create: if validIdentity() && validBody() && request.resource.data.keys().hasOnly(['projectId','userId','displayName','photoURL','title','body','status','createdAt','updatedAt']) && request.resource.data.projectId is string && request.resource.data.title is string && request.resource.data.title.size() <= 120 && request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+   allow delete: if signedIn() && (resource.data.userId == request.auth.uid || moderator());
+   allow update: if moderator();
+  }
+  match /commentReports/{id} {
+   allow create: if signedIn() && request.resource.data.keys().hasOnly(['commentId','reporterId','reason','createdAt']) && request.resource.data.reporterId == request.auth.uid && request.resource.data.commentId is string && request.resource.data.reason is string && request.resource.data.reason.size() <= 300 && request.resource.data.createdAt == request.time;
+   allow read,update,delete: if moderator();
+  }
+ }
+}
